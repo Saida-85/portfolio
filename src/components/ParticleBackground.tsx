@@ -4,10 +4,14 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 // ---- Tweak these values to change speed and feel ----
-const ROTATION_SPEED = 0.05; // spin speed (0.03 gentle, 0.05 normal, 0.1 fast)
-const MOUSE_STRENGTH_X = 0.6; // how far the camera moves left/right with the mouse
-const MOUSE_STRENGTH_Y = 0.4; // how far the camera moves up/down with the mouse
-const FOLLOW_SPEED = 5; // how fast the camera follows the mouse (higher = snappier)
+const AUTO_SPIN_SPEED = 0.03; // slow drift when you are not scrolling
+const SCROLL_SPIN_SPEED = 0.0035; // radians per pixel scrolled (0.002 gentle, 0.0035 normal, 0.006 fast)
+const SCROLL_TILT = 0.0004; // tilt added while scrolling
+const SCROLL_FOLLOW_SPEED = 4; // how fast the spin catches up with scroll (higher = snappier)
+const MOUSE_STRENGTH_X = 0.6; // camera movement left/right with the mouse
+const MOUSE_STRENGTH_Y = 0.4; // camera movement up/down with the mouse
+const FOLLOW_SPEED = 5; // how fast the camera follows the mouse
+const FORCE_ANIMATION = true; // true = always animate, even if Windows "Animation effects" is off
 // -----------------------------------------------------
 
 export default function ParticleBackground() {
@@ -17,11 +21,11 @@ export default function ParticleBackground() {
         const container = containerRef.current;
         if (!container) return;
 
-        const reducedMotion = window.matchMedia(
+        const prefersReducedMotion = window.matchMedia(
             "(prefers-reduced-motion: reduce)",
         ).matches;
 
-        // Checked once here, not on every frame.
+        const reducedMotion = FORCE_ANIMATION ? false : prefersReducedMotion;
         const touchDevice = window.matchMedia("(pointer: coarse)").matches;
 
         const isMobile = window.innerWidth < 768;
@@ -105,6 +109,34 @@ export default function ParticleBackground() {
         let elapsed = 0;
         let lastTime = 0;
 
+        // Spin that comes from time (slow drift)
+        let autoRotation = 0;
+        // Spin that comes from scrolling (smoothed)
+        let scrollRotation = 0;
+        let targetScrollRotation = window.scrollY * SCROLL_SPIN_SPEED;
+        scrollRotation = targetScrollRotation;
+
+        let scrollTilt = 0;
+        let targetScrollTilt = window.scrollY * SCROLL_TILT;
+        scrollTilt = targetScrollTilt;
+
+        const renderStatic = () => {
+            particles.rotation.y = autoRotation + scrollRotation;
+            particles.rotation.x = scrollTilt;
+            renderer.render(scene, camera);
+        };
+
+        const onScroll = () => {
+            targetScrollRotation = window.scrollY * SCROLL_SPIN_SPEED;
+            targetScrollTilt = window.scrollY * SCROLL_TILT;
+
+            if (reducedMotion) {
+                scrollRotation = targetScrollRotation;
+                scrollTilt = targetScrollTilt;
+                renderStatic();
+            }
+        };
+
         const onPointerMove = (event: PointerEvent) => {
             if (event.pointerType === "touch") return;
 
@@ -125,7 +157,7 @@ export default function ParticleBackground() {
             renderer.setSize(width, height);
 
             if (reducedMotion) {
-                renderer.render(scene, camera);
+                renderStatic();
             }
         };
 
@@ -144,8 +176,19 @@ export default function ParticleBackground() {
             lastTime = time;
             elapsed += delta;
 
-            particles.rotation.y += delta * ROTATION_SPEED;
-            particles.rotation.x = Math.sin(elapsed * 0.12) * 0.035;
+            // Smoothly follow the scroll position (frame-rate independent)
+            const scrollFollow = 1 - Math.exp(-SCROLL_FOLLOW_SPEED * delta);
+            scrollRotation +=
+                (targetScrollRotation - scrollRotation) * scrollFollow;
+            scrollTilt += (targetScrollTilt - scrollTilt) * scrollFollow;
+
+            // Slow drift so it never looks frozen
+            autoRotation += delta * AUTO_SPIN_SPEED;
+
+            // SPIN: drift + scroll
+            particles.rotation.y = autoRotation + scrollRotation;
+            particles.rotation.x =
+                Math.sin(elapsed * 0.12) * 0.035 + scrollTilt;
             particles.position.y = Math.sin(elapsed * 0.28) * 0.12;
 
             const targetX = touchDevice
@@ -156,7 +199,6 @@ export default function ParticleBackground() {
                 ? Math.cos(elapsed * 0.15) * 0.1
                 : -pointer.y * MOUSE_STRENGTH_Y;
 
-            // Frame-rate independent easing: same feel on 60Hz and 120Hz screens.
             const follow = 1 - Math.exp(-FOLLOW_SPEED * delta);
 
             camera.position.x += (targetX - camera.position.x) * follow;
@@ -166,19 +208,21 @@ export default function ParticleBackground() {
             renderer.render(scene, camera);
         };
 
+        window.addEventListener("scroll", onScroll, { passive: true });
         window.addEventListener("resize", onResize);
         window.addEventListener("pointermove", onPointerMove, {
             passive: true,
         });
 
         if (reducedMotion) {
-            renderer.render(scene, camera);
+            renderStatic();
         } else {
             frameId = window.requestAnimationFrame(animate);
         }
 
         return () => {
             window.cancelAnimationFrame(frameId);
+            window.removeEventListener("scroll", onScroll);
             window.removeEventListener("resize", onResize);
             window.removeEventListener("pointermove", onPointerMove);
 

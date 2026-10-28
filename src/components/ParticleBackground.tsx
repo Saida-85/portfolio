@@ -4,13 +4,20 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 // ---- Tweak these values to change speed and feel ----
-const AUTO_SPIN_SPEED = 0.03; // slow drift when you are not scrolling
-const SCROLL_SPIN_SPEED = 0.0035; // radians per pixel scrolled (0.002 gentle, 0.0035 normal, 0.006 fast)
-const SCROLL_TILT = 0.0004; // tilt added while scrolling
-const SCROLL_FOLLOW_SPEED = 4; // how fast the spin catches up with scroll (higher = snappier)
-const MOUSE_STRENGTH_X = 0.6; // camera movement left/right with the mouse
-const MOUSE_STRENGTH_Y = 0.4; // camera movement up/down with the mouse
-const FOLLOW_SPEED = 5; // how fast the camera follows the mouse
+const AUTO_SPIN_SPEED = 0.1; // slow drift (faster)
+const SCROLL_SPIN_SPEED = 0.007; // spin per pixel scrolled (faster)
+const SCROLL_TILT = 0.0005; // tilt added while scrolling
+const SCROLL_FOLLOW_SPEED = 8; // how fast the scroll spin catches up
+
+const HOVER_SPIN_Y = 2.2; // MUCH faster turn left/right with the mouse (was 1.1)
+const HOVER_SPIN_X = 1; // faster tilt up/down with the mouse (was 0.5)
+const HOVER_SHIFT_X = 1.8; // sideways slide
+const HOVER_SHIFT_Y = 0.9; // up/down slide
+const HOVER_FOLLOW_SPEED = 12; // hover reacts almost instantly (was 7)
+
+const MOUSE_STRENGTH_X = 0.8; // camera parallax left/right
+const MOUSE_STRENGTH_Y = 0.5; // camera parallax up/down
+const FOLLOW_SPEED = 7; // how fast the camera follows the mouse
 const FORCE_ANIMATION = true; // true = always animate, even if Windows "Animation effects" is off
 // -----------------------------------------------------
 
@@ -103,7 +110,9 @@ export default function ParticleBackground() {
         const particles = new THREE.Points(geometry, material);
         scene.add(particles);
 
+        // Raw mouse position (-1 to 1) and a smoothed copy used for hover movement
         const pointer = { x: 0, y: 0 };
+        const smoothPointer = { x: 0, y: 0 };
 
         let frameId = 0;
         let elapsed = 0;
@@ -111,14 +120,13 @@ export default function ParticleBackground() {
 
         // Spin that comes from time (slow drift)
         let autoRotation = 0;
-        // Spin that comes from scrolling (smoothed)
-        let scrollRotation = 0;
-        let targetScrollRotation = window.scrollY * SCROLL_SPIN_SPEED;
-        scrollRotation = targetScrollRotation;
 
-        let scrollTilt = 0;
+        // Spin that comes from scrolling (smoothed)
+        let targetScrollRotation = window.scrollY * SCROLL_SPIN_SPEED;
+        let scrollRotation = targetScrollRotation;
+
         let targetScrollTilt = window.scrollY * SCROLL_TILT;
-        scrollTilt = targetScrollTilt;
+        let scrollTilt = targetScrollTilt;
 
         const renderStatic = () => {
             particles.rotation.y = autoRotation + scrollRotation;
@@ -142,6 +150,12 @@ export default function ParticleBackground() {
 
             pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
             pointer.y = (event.clientY / window.innerHeight) * 2 - 1;
+        };
+
+        const onPointerLeave = () => {
+            // Ease back to the center when the mouse leaves the window
+            pointer.x = 0;
+            pointer.y = 0;
         };
 
         const onResize = () => {
@@ -176,21 +190,35 @@ export default function ParticleBackground() {
             lastTime = time;
             elapsed += delta;
 
-            // Smoothly follow the scroll position (frame-rate independent)
+            // Smoothly follow the scroll position
             const scrollFollow = 1 - Math.exp(-SCROLL_FOLLOW_SPEED * delta);
             scrollRotation +=
                 (targetScrollRotation - scrollRotation) * scrollFollow;
             scrollTilt += (targetScrollTilt - scrollTilt) * scrollFollow;
 
+            // Smoothly follow the mouse for the hover movement
+            const hoverFollow = 1 - Math.exp(-HOVER_FOLLOW_SPEED * delta);
+            smoothPointer.x += (pointer.x - smoothPointer.x) * hoverFollow;
+            smoothPointer.y += (pointer.y - smoothPointer.y) * hoverFollow;
+
             // Slow drift so it never looks frozen
             autoRotation += delta * AUTO_SPIN_SPEED;
 
-            // SPIN: drift + scroll
-            particles.rotation.y = autoRotation + scrollRotation;
+            // SPIN: drift + scroll + hover (mouse left/right turns it)
+            particles.rotation.y =
+                autoRotation + scrollRotation + smoothPointer.x * HOVER_SPIN_Y;
             particles.rotation.x =
-                Math.sin(elapsed * 0.12) * 0.035 + scrollTilt;
-            particles.position.y = Math.sin(elapsed * 0.28) * 0.12;
+                Math.sin(elapsed * 0.12) * 0.035 +
+                scrollTilt +
+                smoothPointer.y * HOVER_SPIN_X;
 
+            // MOVE: the whole background slides with the mouse
+            particles.position.x = smoothPointer.x * HOVER_SHIFT_X;
+            particles.position.y =
+                Math.sin(elapsed * 0.28) * 0.12 -
+                smoothPointer.y * HOVER_SHIFT_Y;
+
+            // Camera parallax for extra depth
             const targetX = touchDevice
                 ? Math.sin(elapsed * 0.2) * 0.15
                 : pointer.x * MOUSE_STRENGTH_X;
@@ -213,6 +241,10 @@ export default function ParticleBackground() {
         window.addEventListener("pointermove", onPointerMove, {
             passive: true,
         });
+        document.documentElement.addEventListener(
+            "pointerleave",
+            onPointerLeave,
+        );
 
         if (reducedMotion) {
             renderStatic();
@@ -225,6 +257,10 @@ export default function ParticleBackground() {
             window.removeEventListener("scroll", onScroll);
             window.removeEventListener("resize", onResize);
             window.removeEventListener("pointermove", onPointerMove);
+            document.documentElement.removeEventListener(
+                "pointerleave",
+                onPointerLeave,
+            );
 
             scene.remove(particles);
             geometry.dispose();

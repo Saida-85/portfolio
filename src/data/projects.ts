@@ -1,5 +1,5 @@
 export type Project = {
-    id: "bazardor" | "fitlog" | "devstack";
+    id: "bazardor" | "fitlog" | "devstack" | "pizzahub";
     name: string;
     image: string;
     shortDescription: string;
@@ -173,6 +173,71 @@ export const projects: Project[] = [
             "Offer export options and optional account-based synchronization.",
         ],
     },
+
+{
+    id: "pizzahub",
+    name: "🍕 PizzaHub — Pizza Ordering & Delivery Platform",
+    image: "/pizzaHub.png",
+    shortDescription:
+        "A full-stack pizza ordering and delivery platform with customer, vendor, and admin dashboards.",
+    description:
+        "PizzaHub is a full-stack pizza ordering and delivery platform built with Next.js and Express.js. Customers can explore pizza shops, browse menus, place orders, track order status, and manage favorites. Vendors can manage menu items and customer orders, while administrators can manage users, approve menu items, and monitor transactions. The platform also integrates Google authentication and Stripe payments for premium vendor subscriptions.",
+    liveUrl: "https://pizza-hub-swart-nine.vercel.app/",
+    repositoryUrl: "https://github.com/Saida-85/PizzaHub",
+    technologies: [
+        "Next.js 16",
+        "React 19",
+        "TypeScript",
+        "Tailwind CSS 4",
+        "Express.js",
+        "MongoDB",
+        "Better Auth",
+        "Google OAuth",
+        "Stripe",
+        "ImgBB",
+        "Vercel & Render",
+    ],
+    features: [
+        {
+            title: "Authentication & Role-Based Access",
+            description:
+                "Secure email/password and Google authentication with separate Customer, Vendor, and Admin roles and protected dashboards.",
+        },
+        {
+            title: "Customer Ordering & Tracking",
+            description:
+                "Browse pizza menus, search and filter items, place orders, manage favorites, and track order status.",
+        },
+        {
+            title: "Vendor Dashboard & Management",
+            description:
+                "Vendors can create, update, and delete menu items, upload images, and accept or reject customer orders.",
+        },
+        {
+            title: "Admin Dashboard",
+            description:
+                "Administrators can manage users, block or unblock accounts, approve or reject menu items, and monitor transactions.",
+        },
+        {
+            title: "Stripe Premium Subscription",
+            description:
+                "Stripe Checkout allows vendors to upgrade to a Premium plan with unlimited active menu items and featured placement.",
+        },
+    ],
+    challenges: [
+        "Implementing secure authentication and synchronizing user sessions between Next.js and the Express backend.",
+        "Building role-based access control and protecting customer, vendor, and admin routes.",
+        "Managing real-time order workflows and permissions across different user roles.",
+        "Integrating Stripe payments and verifying JWT tokens between separate frontend and backend applications.",
+    ],
+    futurePlans: [
+        "Introduce real-time order notifications.",
+        "Add customer reviews and restaurant ratings.",
+        "Implement live delivery tracking.",
+        "Improve restaurant discovery with location-based recommendations.",
+    ],
+},
+
 ];
 
 export function getProjectById(id: string): Project | undefined {
